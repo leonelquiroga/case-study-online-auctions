@@ -14,6 +14,16 @@ A full stack platform that took a public auctioneer's auctions online: public pr
 
 **Built:** 2021 · **Type:** Freelance · **Role:** Lead full stack developer
 
+[The problem](#the-problem) ·
+[The solution](#the-solution) ·
+[My role](#my-role) ·
+[Architecture](#architecture-at-a-glance) ·
+[Key decisions](#key-technical-decisions) ·
+[Challenges](#challenges-and-how-i-solved-them) ·
+[What I'd do differently](#what-id-do-differently-today) ·
+[Tech stack](#tech-stack) ·
+[Docs](#documentation)
+
 ---
 
 ## The problem
