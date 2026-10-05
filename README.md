@@ -5,15 +5,14 @@ A full stack platform that took a public auctioneer's auctions online: public pr
 ![PHP](https://img.shields.io/badge/PHP-777BB4?style=flat-square&logo=php&logoColor=white)
 ![Laravel](https://img.shields.io/badge/Laravel-FF2D20?style=flat-square&logo=laravel&logoColor=white)
 ![Livewire](https://img.shields.io/badge/Livewire-4E56A6?style=flat-square&logo=livewire&logoColor=white)
+![React](https://img.shields.io/badge/React-61DAFB?style=flat-square&logo=react&logoColor=black)
 ![Alpine.js](https://img.shields.io/badge/Alpine.js-8BC0D0?style=flat-square&logo=alpinedotjs&logoColor=black)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white)
-![DaisyUI](https://img.shields.io/badge/DaisyUI-5A0EF8?style=flat-square&logo=daisyui&logoColor=white)
 ![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=flat-square&logo=mysql&logoColor=white)
 ![WebSockets](https://img.shields.io/badge/WebSockets-Ratchet-010101?style=flat-square)
 ![Mercado Pago](https://img.shields.io/badge/Mercado_Pago-00B1EA?style=flat-square&logo=mercadopago&logoColor=white)
 
-**Timeline:** 2019, with support until 2020 · **Type:** Freelance · **Role:** Lead full stack developer
-<!-- TODO: Confirm the dates. Laravel Jetstream and DaisyUI were released in 2020, so the codebase as it exists today may come from a 2020 rewrite or upgrade. -->
+**Built:** 2021 · **Type:** Freelance · **Role:** Lead full stack developer
 
 ---
 
@@ -27,26 +26,24 @@ A public auctioneer ran in-person auctions of vehicles, trucks, machinery, mater
 ## The solution
 
 - **Public website** that lists upcoming auctions and their lots, with photos and category-specific details (for example, extra technical data for vehicles).
-- **Secure accounts:** Google sign-in, or email and password with **two-factor authentication (TOTP)**. New users finish sign-up from a tokenized email link.
-- **Guarantee deposits with Mercado Pago:** to bid in an auction, a user pays a deposit online, and an admin then enables that deposit for that user.
+- **Secure accounts:** email and password login protected by **two-factor authentication (TOTP)**. New users finish sign-up from a tokenized email link, and password reset works the same way.
+- **Guarantee deposits with Mercado Pago:** to bid, a user pays a deposit for the active auction online, confirmed against Mercado Pago's own API before it's accepted.
 - **Live auction room** over WebSockets, where up to **50 concurrent users** bid and chat in real time.
-- **Winner flow:** when the auction ends, the winner is notified and pays through Mercado Pago.
-- **Admin panel:** user management, deposit approval, lot image uploads, a live auction console, and post-auction reports.
+- **Admin panel:** user management, a live auction console to run the bidding and close lots, deposit activation for exceptions, lot image uploads, and post-auction reports.
 
 ## My role
 
 I **led the full stack development end to end**, from data model and backend to UI, payments and real-time features, and I did the **whole deployment** myself, including DNS setup and the HTTPS certificate.
 
-I worked with a second developer. We used a simple Git flow: feature work merged into a `testing` branch through **pull requests**, then `testing` was promoted to `main` for production.
-<!-- TODO: Describe which parts the second developer built. -->
+I worked with a second developer, who built the live auction room — its WebSocket server and real-time client — under my direction, while I owned the rest of the system. We used a simple Git flow: feature work merged into a `testing` branch through **pull requests**, then `testing` was promoted to `main` for production.
 
 ## Architecture at a glance
 
 ```mermaid
 flowchart LR
     subgraph Browser
-        Site["Public site and user area<br/>Blade + Livewire + Alpine.js"]
-        Room["Live auction room<br/>WebSocket client"]
+        Site["Public site and user area<br/>Blade + Livewire"]
+        Room["Live auction room<br/>React client"]
         Admin["Admin panel and live console"]
     end
 
@@ -56,7 +53,6 @@ flowchart LR
         DB[("MySQL")]
     end
 
-    Google["Google OAuth"]
     MP["Mercado Pago API"]
     Mail["Email delivery"]
 
@@ -65,9 +61,8 @@ flowchart LR
     Room <-->|"WSS: bids and chat"| WS
     Admin <-->|WSS| WS
     App --> DB
-    App <-->|"sign-in"| Google
-    App <-->|"payments and notifications"| MP
-    App -->|"sign-up links, password reset, notices"| Mail
+    App <-->|"payments"| MP
+    App -->|"sign-up links, password reset"| Mail
 ```
 
 More detail in [docs/architecture.md](docs/architecture.md).
@@ -82,45 +77,44 @@ More detail in [docs/architecture.md](docs/architecture.md).
 - *Why:* PHP's request/response cycle can't hold long-lived connections. A separate Ratchet process kept persistent connections open and broadcast every bid and chat message to all connected clients with very low latency.
 - *Trade-off:* it's one more process to deploy, monitor and restart. As a pure relay, it also put the responsibility for bid consistency on the rest of the system (see "What I'd do differently today").
 
-**3. Guarantee deposits with manual admin approval**
-- *Why:* the auctioneer needed to know that every bidder was real and able to pay. Mercado Pago handled the money, and an admin enabled each deposit per user and per auction before that user could bid.
-- *Trade-off:* the manual step adds friction and depends on an admin being available, but it matched how the business already worked and kept a human in control of who could bid.
+**3. Deposit activation tied to payment, with a manual override for exceptions**
+- *Why:* when Mercado Pago redirects a user back to the app, the server re-checks that payment against Mercado Pago's own API before trusting it, and activates the deposit immediately if it's approved. That kept the common path fast, with no one waiting on a human. The admin panel can also activate a deposit by hand for cases outside that path, such as a payment arranged by phone.
+- *Trade-off:* there's no server-to-server webhook as a backup, only the browser's redirect. A user who pays and never returns to the site could end up with a deposit that was never recorded (see "What I'd do differently today").
 
 **4. Mercado Pago as the payment provider**
 - *Why:* it's the dominant payment method in Argentina, users already trust it, and it has official SDKs for both PHP and JavaScript.
-- *Trade-off:* it ties the platform to one regional provider, and payment status arrives asynchronously, so the app has to reconcile redirects and webhooks.
+- *Trade-off:* it ties the platform to one regional provider, and its redirect-based confirmation shaped how deposits had to be verified.
 
 ## Challenges and how I solved them
 
 - **Real-time bidding for up to 50 concurrent users.** HTTP polling would have been slow and wasteful. I added a persistent WebSocket server, so every bid reaches every participant almost instantly, with no polling.
-- **Trusting bidders before they bid.** Anyone can create an account, so I built a gate: email-verified sign-up, then a paid guarantee deposit, then admin approval per auction. Only after all three can a user bid.
-- **Payments that confirm asynchronously.** A payment's final status doesn't always arrive with the user's redirect. I handled the confirmation from Mercado Pago on the server, so a deposit is recorded from the provider's own status, not from what the browser claims.
-<!-- TODO: Confirm whether deposits were confirmed by the return redirect, by webhook notifications, or both. -->
-- **Account security for a money-related product.** I added TOTP two-factor authentication alongside Google sign-in, and used tokenized email links for both registration and password reset.
-- **Shipping to production by myself.** I configured the domain's DNS and the HTTPS certificate, which secure WebSockets (WSS) and payment callbacks both require.
-<!-- TODO: Add the hosting setup (VPS, shared hosting, other) and how the Ratchet process was kept alive (Supervisor, pm2, systemd). -->
+- **Trusting bidders before they bid.** Anyone can create an account, so I gated bidding behind a verified sign-up and a paid guarantee deposit for that auction. The deposit is only accepted after the server confirms it directly with Mercado Pago.
+- **Confirming a payment without trusting the browser.** A redirect's query string can be tampered with or arrive incomplete. I re-fetched the payment from Mercado Pago's API on the server before recording a deposit, so what gets saved reflects the provider's own status, not what the URL claims.
+- **Account security for a money-related product.** I added TOTP two-factor authentication, and used tokenized email links for both registration and password reset.
+- **Shipping to production by myself.** I configured the domain's DNS and the HTTPS certificate on the VPS, which secure WebSockets (WSS) and Mercado Pago's callbacks both require.
 
 ## What I'd do differently today
 
-- **Automated tests:** feature tests for the deposit and bidding rules, plus contract tests for payment webhooks, running on every pull request.
-- **CI/CD:** a GitHub Actions pipeline (lint, tests, build, deploy) instead of manual deploys from `main`.
+- **Role-based authorization.** Every admin screen only checked that someone was logged in and verified — not that they were actually an admin. Any registered account could technically reach them. I'd add a role to the user and enforce it with route middleware or policies, so a regular account structurally can't reach admin tools.
+- **A real payment webhook.** Deposits were only confirmed through the browser's redirect back from Mercado Pago. I'd add their webhook as a backup, with idempotency on the payment ID, so a result is never missed because a user closed the tab, and never recorded twice.
+- **Server-side bid validation.** The relay accepted whatever offer a client sent and broadcast it as-is. I'd make the server authoritative: check that the bidder's deposit is active and the new offer beats the current one, persist it, and only then broadcast it.
+- **Automated tests:** feature tests for the deposit and bidding rules, running on every pull request.
+- **CI/CD:** a pipeline (lint, tests, build, deploy) instead of manual deploys from `main`.
 - **Containers:** Docker for the app, the WebSocket server and the database, so local, staging and production all match.
-- **Stronger typing:** strict types and static analysis (PHPStan/Larastan) in PHP, and TypeScript for the live room client.
-- **Managed real-time:** Laravel Reverb or a managed WebSocket service instead of a hand-rolled relay. I'd also make the server authoritative: validate each bid (deposit enabled, amount above the current highest bid) and persist it *before* broadcasting it.
-- **Queues for notifications:** send emails and winner notices from background jobs, so a slow mail provider never blocks a request.
-- **Idempotent webhooks:** store each payment notification's ID and ignore duplicates, so a retried webhook can never record a payment twice.
+- **Stronger typing:** static analysis in PHP, and TypeScript for the live room client.
+- **Managed real-time:** Laravel Reverb or a managed WebSocket service instead of a hand-rolled relay.
 
 ## Tech stack
 
 | Layer | Technologies |
 |---|---|
 | Backend | PHP, Laravel, Laravel Jetstream (auth + TOTP 2FA), Laravel Sanctum, Livewire |
-| Frontend | Blade, Tailwind CSS, DaisyUI, Alpine.js, Laravel Mix |
-| Real-time | Standalone WebSocket server in PHP (Ratchet) |
+| Frontend | Blade, Tailwind CSS, Alpine.js, Laravel Mix |
+| Real-time | Standalone WebSocket server in PHP (Ratchet), React client for the live room |
 | Database | MySQL |
 | Payments | Mercado Pago (official PHP SDK and JS SDK) |
-| Auth | Email + password with TOTP 2FA, Google sign-in, email token links |
-| Infrastructure | DNS and HTTPS configuration, production deployment <!-- TODO: hosting provider --> |
+| Auth | Email + password with TOTP 2FA, tokenized email links for sign-up and password reset |
+| Infrastructure | VPS, DNS and HTTPS configuration, production deployment |
 | Workflow | Git, `testing` → `main` branches with pull requests |
 
 ## Documentation
