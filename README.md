@@ -139,4 +139,4 @@ More detail in [docs/architecture.md](docs/architecture.md).
 
 ---
 
-Leonel Quiroga · [github.com/leonelquiroga](https://github.com/leonelquiroga) · [linkedin.com/in/leonelquiroga](https://www.linkedin.com/in/leonelquiroga)
+Leonel Quiroga · [github.com/leonelquiroga](https://github.com/leonelquiroga) · [linkedin.com/in/leonel-quiroga-engineer](https://www.linkedin.com/in/leonel-quiroga-engineer/)
