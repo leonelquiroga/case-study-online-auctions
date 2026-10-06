@@ -133,6 +133,8 @@ More detail in [docs/architecture.md](docs/architecture.md).
 - [Data model (ER diagram)](docs/data-model.md)
 - [Key flows (sequence diagrams)](docs/flows.md)
 
+This repository's own content — the write-up, diagrams and docs — is [MIT licensed](LICENSE). The original client source code isn't included here and remains private.
+
 ---
 
 > Source code is private (client project). This repository documents the architecture and my approach.
